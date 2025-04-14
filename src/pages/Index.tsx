@@ -2,7 +2,7 @@
 import React from 'react';
 import MainMenu from '@/components/MainMenu';
 
-const Index = () => {
+const Index: React.FC = () => {
   return <MainMenu />;
 };
 
