@@ -2,6 +2,7 @@
 export type GameState = {
   health: number;
   energy: number;
+  lives: number;
   reality: 'physical' | 'digital';
   position: { x: number; y: number };
   velocity: { x: number; y: number };
@@ -10,6 +11,14 @@ export type GameState = {
   interactables: Interactable[];
   tempStairs: TempStair[];
   level: number;
+  hazardHits: number;
+  inventory: InventoryItem[];
+};
+
+export type InventoryItem = {
+  id: string;
+  type: 'battery' | 'heart';
+  quantity: number;
 };
 
 export type Platform = {
@@ -26,7 +35,7 @@ export type Interactable = {
   y: number;
   width: number;
   height: number;
-  type: 'terminal' | 'door' | 'item';
+  type: 'terminal' | 'door' | 'item' | 'ladder' | 'hazard' | 'battery' | 'heart';
   state: 'locked' | 'unlocked';
   reality: 'physical' | 'digital' | 'both';
   isMoving?: boolean;
@@ -34,6 +43,7 @@ export type Interactable = {
   moveDirection?: 'horizontal' | 'vertical';
   moveRange?: number;
   originalPosition?: { x: number; y: number };
+  collected?: boolean;
 };
 
 export type TempStair = {

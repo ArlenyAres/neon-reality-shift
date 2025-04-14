@@ -4,14 +4,16 @@ import GameCanvas from '@/components/GameCanvas';
 import GameHUD from '@/components/GameHUD';
 import TransitionScreen from '@/components/TransitionScreen';
 import { Link } from 'react-router-dom';
-import { Menu, CircleArrowLeft } from 'lucide-react';
+import { Menu, CircleArrowLeft, Battery, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from '@/components/ui/use-toast';
+import { INITIAL_LIVES } from '@/constants/game.constants';
 
 const Game: React.FC = () => {
   const [health, setHealth] = useState(100);
   const [energy, setEnergy] = useState(100);
+  const [lives, setLives] = useState(INITIAL_LIVES);
   const [reality, setReality] = useState<'physical' | 'digital'>('physical');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionFrom, setTransitionFrom] = useState<'physical' | 'digital'>('physical');
@@ -19,6 +21,7 @@ const Game: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [solvedObjects, setSolvedObjects] = useState(0);
   const [level, setLevel] = useState(1);
+  const [inventory, setInventory] = useState<{type: string, count: number}[]>([]);
   const { toast } = useToast();
   
   // Handle object solved event
@@ -155,6 +158,29 @@ const Game: React.FC = () => {
         </div>
       )}
       
+      {/* Inventory quick access buttons */}
+      {!isPaused && inventory.length > 0 && (
+        <div className="md:hidden absolute bottom-20 left-4 z-20 flex flex-col gap-2">
+          {inventory.some(item => item.type === 'battery' && item.count > 0) && (
+            <Button 
+              variant="outline" 
+              className="h-12 w-12 rounded-full bg-cyber-dark bg-opacity-60 border-2 border-neon-green disabled:opacity-50"
+            >
+              <Battery className="h-6 w-6 text-neon-green" />
+            </Button>
+          )}
+          
+          {inventory.some(item => item.type === 'heart' && item.count > 0) && (
+            <Button 
+              variant="outline" 
+              className="h-12 w-12 rounded-full bg-cyber-dark bg-opacity-60 border-2 border-neon-pink disabled:opacity-50"
+            >
+              <Heart className="h-6 w-6 text-neon-pink" />
+            </Button>
+          )}
+        </div>
+      )}
+      
       {/* Game Canvas */}
       {!isTransitioning && (
         <div className="w-full h-screen flex justify-center items-center">
@@ -179,6 +205,8 @@ const Game: React.FC = () => {
             <span className="text-neon-blue"> Space</span> - Jump | 
             <span className="text-neon-blue"> Tab</span> - Shift Reality | 
             <span className="text-neon-blue"> E</span> - Interact | 
+            <span className="text-neon-blue"> C</span> - Create Stairs |
+            <span className="text-neon-blue"> 1/2</span> - Use Inventory Items |
             <span className="text-neon-blue"> Esc</span> - Pause
           </p>
         </div>

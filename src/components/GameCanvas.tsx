@@ -4,22 +4,25 @@ import { useToast } from '@/components/ui/use-toast';
 import { Heart, Zap, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GameState, GameCanvasProps } from '@/types/game.types';
-import { MOVE_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, STAIR_DURATION } from '@/constants/game.constants';
+import { MOVE_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, STAIR_DURATION, INITIAL_LIVES } from '@/constants/game.constants';
 import { generateLevelState, getLevelColors } from '@/utils/levelGenerator';
 import { checkCollisions, updateInteractables, cleanupStairs } from '@/utils/gamePhysics';
-import { findInteractableAtPosition, handleInteractableAction } from '@/utils/interactionHandler';
+import { findInteractableAtPosition, handleInteractableAction, useInventoryItem } from '@/utils/interactionHandler';
 import { renderGame } from '@/utils/gameRenderer';
-import { createTempStair, updatePlayerPosition, handlePlayerFall } from '@/utils/playerActions';
+import { createTempStair, updatePlayerPosition, handlePlayerFall, isNearLadder, checkHazardCollisions, spawnRandomItems } from '@/utils/playerActions';
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [gameState, setGameState] = useState<GameState>(() => generateLevelState(level));
   const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isClimbing, setIsClimbing] = useState(false);
   const { toast } = useToast();
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastStairRef = useRef<number>(0);
+  const lastHazardHitRef = useRef<number>(0);
+  const hazardCooldownMs = 1000; // 1 second cooldown between hazard hits
 
   // Generate level state based on current level
   useEffect(() => {
@@ -85,6 +88,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       // Interact with E
       if (e.code === 'KeyE') {
         handleInteraction();
+      }
+      
+      // Use items from inventory with 1 for battery and 2 for heart
+      if (e.code === 'Digit1') {
+        setGameState(prev => useInventoryItem(prev, 'battery', showMessage, showToastMessage));
+      }
+      
+      if (e.code === 'Digit2') {
+        setGameState(prev => useInventoryItem(prev, 'heart', showMessage, showToastMessage));
       }
     };
     
@@ -153,6 +165,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
     }
   };
   
+  // Check if player is on a ladder
+  useEffect(() => {
+    setIsClimbing(isNearLadder(gameState));
+  }, [gameState.position, gameState.reality, gameState.tempStairs]);
+  
   // Game loop
   useEffect(() => {
     let animationFrameId: number;
@@ -169,7 +186,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         let newState = { ...prev };
         
         // Apply movement based on keys pressed
-        newState = updatePlayerPosition(newState, keysPressed, MOVE_SPEED);
+        newState = updatePlayerPosition(newState, keysPressed, MOVE_SPEED, isClimbing);
         
         // Check collisions
         newState = checkCollisions(newState, canvas);
@@ -177,11 +194,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         // Update interactables
         newState = updateInteractables(newState);
         
+        // Check for hazard collisions (with cooldown)
+        const now = Date.now();
+        if (newState.level >= 3 && now - lastHazardHitRef.current > hazardCooldownMs) {
+          const stateAfterHazardCheck = checkHazardCollisions(newState, showMessage);
+          if (stateAfterHazardCheck.hazardHits !== newState.hazardHits) {
+            // If hazard hits changed, we hit a hazard, so update the timestamp
+            lastHazardHitRef.current = now;
+            newState = stateAfterHazardCheck;
+          }
+        }
+        
+        // Spawn random batteries and hearts in level 3+
+        newState = spawnRandomItems(newState, canvas);
+        
         // Handle falling
         newState = handlePlayerFall(newState, canvas.height, showMessage);
         
         // Game over check
-        if (newState.health <= 0) {
+        if (newState.health <= 0 || newState.lives <= 0) {
           setTimeout(() => {
             setGameState(generateLevelState(1));
           }, 2000);
@@ -211,7 +242,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         clearTimeout(messageTimeoutRef.current);
       }
     };
-  }, [keysPressed, isTransitioning, level, onObjectSolved]);
+  }, [keysPressed, isTransitioning, level, onObjectSolved, isClimbing]);
   
   return (
     <div className="relative w-full h-full flex flex-col justify-center items-center">
@@ -271,7 +302,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       
       {/* Controls Info */}
       <div className="absolute bottom-0 left-0 text-xs text-muted-foreground p-2">
-        <p>WASD/Arrows to move, Space to jump, Tab to shift reality, E to interact, C to create stairs</p>
+        <p>WASD/Arrows: mover, Space: saltar, Tab: cambiar realidad, E: interactuar, C: crear escaleras, 1/2: usar objetos del inventario</p>
+      </div>
+      
+      {/* Lives and inventory display */}
+      <div className="absolute top-16 left-0 text-xs text-white p-2 holographic rounded-md m-2">
+        <p>Vidas: {gameState.lives} | Nivel: {gameState.level}</p>
+        {gameState.inventory.length > 0 && (
+          <div className="mt-1">
+            <p>Inventario:</p>
+            <ul>
+              {gameState.inventory.map((item, index) => (
+                <li key={index}>
+                  {item.type === 'battery' ? 'Baterías' : 'Corazones'}: {item.quantity} 
+                  {item.type === 'battery' ? ' (1)' : ' (2)'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

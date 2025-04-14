@@ -84,7 +84,7 @@ export function renderGame(context: CanvasRenderingContext2D, gameState: GameSta
   
   // Draw interactable objects
   gameState.interactables.forEach(interactable => {
-    if (interactable.reality === 'both' || interactable.reality === gameState.reality) {
+    if ((interactable.reality === 'both' || interactable.reality === gameState.reality) && !interactable.collected) {
       if (interactable.type === 'terminal') {
         // Draw terminal
         context.fillStyle = interactable.state === 'locked' ? '#F97316' : '#33C3F0';
@@ -159,6 +159,183 @@ export function renderGame(context: CanvasRenderingContext2D, gameState: GameSta
           Math.PI * 2
         );
         context.stroke();
+      } else if (interactable.type === 'ladder') {
+        // Draw ladder
+        context.strokeStyle = gameState.reality === 'physical' ? '#D1B263' : '#3CC7F0';
+        context.lineWidth = 3;
+        
+        // Draw vertical sides
+        context.beginPath();
+        context.moveTo(interactable.x, interactable.y);
+        context.lineTo(interactable.x, interactable.y + interactable.height);
+        context.stroke();
+        
+        context.beginPath();
+        context.moveTo(interactable.x + interactable.width, interactable.y);
+        context.lineTo(interactable.x + interactable.width, interactable.y + interactable.height);
+        context.stroke();
+        
+        // Draw rungs (horizontal steps)
+        context.lineWidth = 2;
+        const numberOfRungs = Math.floor(interactable.height / 15);
+        for (let i = 0; i < numberOfRungs; i++) {
+          context.beginPath();
+          context.moveTo(interactable.x, interactable.y + i * 15);
+          context.lineTo(interactable.x + interactable.width, interactable.y + i * 15);
+          context.stroke();
+        }
+        
+        // Label
+        context.fillStyle = 'white';
+        context.font = '10px "Share Tech Mono", monospace';
+        context.fillText('E: Subir', interactable.x, interactable.y - 5);
+      } else if (interactable.type === 'hazard') {
+        // Draw hazard
+        // Create skull-like shape or warning symbol
+        context.fillStyle = '#ea384c'; // Bright red
+        
+        // Draw hazard base (circle)
+        context.beginPath();
+        context.arc(
+          interactable.x + interactable.width / 2,
+          interactable.y + interactable.height / 2, 
+          interactable.width / 2, 
+          0, 
+          Math.PI * 2
+        );
+        context.fill();
+        
+        // Draw hazard symbol (X)
+        context.strokeStyle = 'white';
+        context.lineWidth = 2;
+        
+        // X shape
+        context.beginPath();
+        context.moveTo(interactable.x + 7, interactable.y + 7);
+        context.lineTo(interactable.x + interactable.width - 7, interactable.y + interactable.height - 7);
+        context.stroke();
+        
+        context.beginPath();
+        context.moveTo(interactable.x + interactable.width - 7, interactable.y + 7);
+        context.lineTo(interactable.x + 7, interactable.y + interactable.height - 7);
+        context.stroke();
+        
+        // Pulsating glow effect
+        const pulseSize = Math.sin(Date.now() / 150) * 3 + 2;
+        context.strokeStyle = 'rgba(234, 56, 76, 0.6)';
+        context.beginPath();
+        context.arc(
+          interactable.x + interactable.width / 2,
+          interactable.y + interactable.height / 2, 
+          interactable.width / 2 + pulseSize, 
+          0, 
+          Math.PI * 2
+        );
+        context.stroke();
+      } else if (interactable.type === 'battery') {
+        // Draw battery
+        // Battery base
+        context.fillStyle = '#4CB944'; // Green
+        context.fillRect(
+          interactable.x + 2,
+          interactable.y,
+          interactable.width - 4,
+          interactable.height
+        );
+        
+        // Battery terminal
+        context.fillStyle = '#333';
+        context.fillRect(
+          interactable.x + interactable.width / 3,
+          interactable.y - 3,
+          interactable.width / 3,
+          3
+        );
+        
+        // Battery charge level indicator lines
+        context.fillStyle = 'white';
+        for (let i = 1; i <= 3; i++) {
+          context.fillRect(
+            interactable.x + 5,
+            interactable.y + (i * interactable.height / 4),
+            interactable.width - 10,
+            2
+          );
+        }
+        
+        // Glow effect
+        const pulseSize = Math.sin(Date.now() / 300) * 2 + 1;
+        context.strokeStyle = 'rgba(76, 185, 68, 0.5)';
+        context.lineWidth = 1;
+        context.beginPath();
+        context.rect(
+          interactable.x - pulseSize,
+          interactable.y - pulseSize,
+          interactable.width + pulseSize * 2,
+          interactable.height + pulseSize * 2
+        );
+        context.stroke();
+        
+        // Label
+        context.fillStyle = 'white';
+        context.font = '8px "Share Tech Mono", monospace';
+        context.fillText('E', interactable.x + interactable.width / 2 - 3, interactable.y + interactable.height / 2 + 3);
+      } else if (interactable.type === 'heart') {
+        // Draw heart
+        context.fillStyle = '#FF6B6B'; // Red/pink
+        
+        // Heart shape
+        const centerX = interactable.x + interactable.width / 2;
+        const centerY = interactable.y + interactable.height / 2;
+        const size = interactable.width / 2;
+        
+        context.beginPath();
+        context.moveTo(centerX, centerY + size / 3);
+        
+        // Left curve
+        context.bezierCurveTo(
+          centerX - size / 2, centerY, 
+          centerX - size, centerY - size / 2,
+          centerX, centerY - size
+        );
+        
+        // Right curve
+        context.bezierCurveTo(
+          centerX + size, centerY - size / 2,
+          centerX + size / 2, centerY, 
+          centerX, centerY + size / 3
+        );
+        
+        context.fill();
+        
+        // Pulsating effect
+        const pulseScale = 1 + Math.sin(Date.now() / 250) * 0.1;
+        context.strokeStyle = 'rgba(255, 107, 107, 0.5)';
+        context.lineWidth = 1;
+        
+        context.beginPath();
+        context.moveTo(centerX, centerY + size / 3 * pulseScale);
+        
+        // Left curve
+        context.bezierCurveTo(
+          centerX - size / 2 * pulseScale, centerY * pulseScale, 
+          centerX - size * pulseScale, centerY - size / 2 * pulseScale,
+          centerX, centerY - size * pulseScale
+        );
+        
+        // Right curve
+        context.bezierCurveTo(
+          centerX + size * pulseScale, centerY - size / 2 * pulseScale,
+          centerX + size / 2 * pulseScale, centerY * pulseScale, 
+          centerX, centerY + size / 3 * pulseScale
+        );
+        
+        context.stroke();
+        
+        // Label
+        context.fillStyle = 'white';
+        context.font = '8px "Share Tech Mono", monospace';
+        context.fillText('E', centerX - 3, centerY + 3);
       }
     }
   });
@@ -198,6 +375,34 @@ export function renderGame(context: CanvasRenderingContext2D, gameState: GameSta
       context.fillStyle = 'rgba(255, 0, 255, 0.3)';
       context.fillRect(canvas.width - width2, y2, width2, 2);
     }
+  }
+  
+  // Draw HUD information directly on canvas
+  // Lives counter
+  context.fillStyle = 'white';
+  context.font = '16px "Share Tech Mono", monospace';
+  context.fillText(`Vidas: ${gameState.lives}`, 10, 40);
+  
+  // Hazard hits (only in level 3+)
+  if (gameState.level >= 3) {
+    context.fillStyle = 'white';
+    context.font = '12px "Share Tech Mono", monospace';
+    context.fillText(`Impactos: ${gameState.hazardHits}/${MAX_HAZARD_HITS}`, 10, 60);
+  }
+  
+  // Inventory status
+  if (gameState.inventory.length > 0) {
+    context.fillStyle = 'white';
+    context.font = '12px "Share Tech Mono", monospace';
+    
+    let yPos = 80;
+    context.fillText('Inventario:', 10, yPos);
+    yPos += 15;
+    
+    gameState.inventory.forEach(item => {
+      context.fillText(`${item.type === 'battery' ? 'Baterías' : 'Corazones'}: ${item.quantity}`, 15, yPos);
+      yPos += 15;
+    });
   }
   
   // Draw level instructions
