@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Heart, Zap, Shield, Database, Cpu } from 'lucide-react';
+import { Heart, Zap, Shield, Database, Cpu, Stairs } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type GameHUDProps = {
@@ -83,6 +83,14 @@ const GameHUD: React.FC<GameHUDProps> = ({
         <div className="holographic rounded-md p-2 flex items-center space-x-2">
           <Database className="h-5 w-5 text-neon-skyBlue" />
           <span className="text-xs font-cyber text-white">SCORE: {score}</span>
+        </div>
+        
+        {/* Controls Information */}
+        <div className="holographic rounded-md p-2 flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
+            <Stairs className="h-4 w-4 text-neon-vividPurple" />
+            <span className="text-xs font-cyber text-white">C: CREAR ESCALERA (10 ENERGÍA)</span>
+          </div>
         </div>
         
         {/* Reality Shift Cost */}

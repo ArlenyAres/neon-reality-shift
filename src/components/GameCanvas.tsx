@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
-import { Heart, Zap, Shield } from 'lucide-react';
+import { Heart, Zap, Shield, Stairs } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type GameState = {
@@ -13,6 +13,8 @@ type GameState = {
   isJumping: boolean;
   platforms: Platform[];
   interactables: Interactable[];
+  tempStairs: TempStair[];
+  level: number;
 };
 
 type Platform = {
@@ -24,6 +26,7 @@ type Platform = {
 };
 
 type Interactable = {
+  id: number;
   x: number;
   y: number;
   width: number;
@@ -31,6 +34,21 @@ type Interactable = {
   type: 'terminal' | 'door' | 'item';
   state: 'locked' | 'unlocked';
   reality: 'physical' | 'digital' | 'both';
+  isMoving?: boolean;
+  moveSpeed?: number;
+  moveDirection?: 'horizontal' | 'vertical';
+  moveRange?: number;
+  originalPosition?: { x: number; y: number };
+};
+
+type TempStair = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  reality: 'physical' | 'digital' | 'both';
+  createdAt: number;
+  duration: number;
 };
 
 type GameCanvasProps = {
@@ -43,6 +61,7 @@ const JUMP_FORCE = -12;
 const MOVE_SPEED = 5;
 const PLAYER_WIDTH = 30;
 const PLAYER_HEIGHT = 50;
+const STAIR_DURATION = 6000; // 6 seconds in milliseconds
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -52,6 +71,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
   const { toast } = useToast();
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastStairRef = useRef<number>(0);
 
   // Generate level state based on current level
   function generateLevelState(level: number): GameState {
@@ -63,6 +83,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
     
     // Base interactables
     const baseInteractables: Interactable[] = [];
+    
+    // Level colors vary with level
+    const levelColors = {
+      physical: {
+        background: level % 3 === 0 ? '#1f2a3a' : level % 2 === 0 ? '#2a1f3a' : '#1f1f3a',
+        platform: level % 3 === 0 ? '#8E77CE' : level % 2 === 0 ? '#7E89AB' : '#7E69AB',
+        player: level % 3 === 0 ? '#a797f5' : level % 2 === 0 ? '#8b97f5' : '#9b87f5',
+      },
+      digital: {
+        background: level % 3 === 0 ? '#1a3a20' : level % 2 === 0 ? '#1a203a' : '#1a3a2a',
+        platform: level % 3 === 0 ? '#33e3f0' : level % 2 === 0 ? '#33f0ae' : '#1EAEDB',
+        player: level % 3 === 0 ? '#33f0f0' : level % 2 === 0 ? '#33f0dd' : '#33C3F0',
+      }
+    };
     
     // Add level-specific platforms and interactables
     if (level === 1) {
@@ -77,18 +111,54 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       // Level 1 interactables - we'll add 10 interactable objects for level completion
       baseInteractables.push(
         // Terminals - 4 terminals
-        { x: 400, y: 470, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
-        { x: 550, y: 330, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
-        { x: 250, y: 380, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
-        { x: 680, y: 230, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
+        { 
+          id: 1,
+          x: 400, y: 470, width: 30, height: 30, 
+          type: 'terminal', state: 'locked', reality: 'digital' 
+        },
+        { 
+          id: 2,
+          x: 550, y: 330, width: 30, height: 30, 
+          type: 'terminal', state: 'locked', reality: 'digital' 
+        },
+        { 
+          id: 3,
+          x: 250, y: 380, width: 30, height: 30, 
+          type: 'terminal', state: 'locked', reality: 'digital',
+          isMoving: true, moveSpeed: 1, moveDirection: 'horizontal', moveRange: 100,
+          originalPosition: { x: 250, y: 380 }
+        },
+        { 
+          id: 4,
+          x: 680, y: 230, width: 30, height: 30, 
+          type: 'terminal', state: 'locked', reality: 'digital' 
+        },
         
-        // Energy items - 3 items
-        { x: 300, y: 370, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'physical' },
-        { x: 470, y: 320, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'physical' },
-        { x: 630, y: 220, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'digital' },
+        // Energy items - 3 items with different behavior in each reality
+        { 
+          id: 5,
+          x: 300, y: 370, width: 20, height: 20, 
+          type: 'item', state: 'unlocked', reality: 'physical',
+          isMoving: true, moveSpeed: 1.5, moveDirection: 'vertical', moveRange: 50,
+          originalPosition: { x: 300, y: 370 }
+        },
+        { 
+          id: 6,
+          x: 470, y: 320, width: 20, height: 20, 
+          type: 'item', state: 'unlocked', reality: 'physical' 
+        },
+        { 
+          id: 7,
+          x: 630, y: 220, width: 20, height: 20, 
+          type: 'item', state: 'unlocked', reality: 'digital' 
+        },
         
         // Door - exit point (counts as 3 objects when unlocked)
-        { x: 750, y: 430, width: 40, height: 70, type: 'door', state: 'locked', reality: 'physical' }
+        { 
+          id: 8,
+          x: 750, y: 430, width: 40, height: 70, 
+          type: 'door', state: 'locked', reality: 'physical' 
+        }
       );
     } else {
       // Higher levels - more complex configurations
@@ -107,23 +177,56 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         // Terminals
         const termX = 100 + Math.random() * 600;
         const termY = 100 + Math.random() * 350;
+        const isMoving = Math.random() > 0.5;
+        const moveDirection = Math.random() > 0.5 ? 'horizontal' as const : 'vertical' as const;
+        
         baseInteractables.push({
+          id: i + 1,
           x: termX, y: termY, width: 30, height: 30,
-          type: 'terminal', state: 'locked', reality: 'digital'
+          type: 'terminal', state: 'locked', reality: 'digital',
+          isMoving: isMoving, 
+          moveSpeed: 1 + Math.random(), 
+          moveDirection: moveDirection, 
+          moveRange: 50 + Math.random() * 50,
+          originalPosition: { x: termX, y: termY }
         });
         
-        // Items
-        const itemX = 100 + Math.random() * 600;
-        const itemY = 100 + Math.random() * 350;
-        const itemReality = Math.random() > 0.5 ? 'physical' : 'digital';
+        // Items - create separate items for physical and digital reality
+        const itemX1 = 100 + Math.random() * 600;
+        const itemY1 = 100 + Math.random() * 350;
+        const isMovingItem1 = Math.random() > 0.3;
+        
         baseInteractables.push({
-          x: itemX, y: itemY, width: 20, height: 20,
-          type: 'item', state: 'unlocked', reality: itemReality
+          id: i + 5,
+          x: itemX1, y: itemY1, width: 20, height: 20,
+          type: 'item', state: 'unlocked', reality: 'physical',
+          isMoving: isMovingItem1, 
+          moveSpeed: 1 + Math.random(), 
+          moveDirection: Math.random() > 0.5 ? 'horizontal' as const : 'vertical' as const, 
+          moveRange: 30 + Math.random() * 70,
+          originalPosition: { x: itemX1, y: itemY1 }
+        });
+        
+        // Create counterpart in digital realm but at different location
+        const itemX2 = 100 + Math.random() * 600;
+        const itemY2 = 100 + Math.random() * 350;
+        const isMovingItem2 = Math.random() > 0.3;
+        
+        baseInteractables.push({
+          id: i + 9,
+          x: itemX2, y: itemY2, width: 20, height: 20,
+          type: 'item', state: 'unlocked', reality: 'digital',
+          isMoving: isMovingItem2, 
+          moveSpeed: 1 + Math.random(), 
+          moveDirection: Math.random() > 0.5 ? 'horizontal' as const : 'vertical' as const, 
+          moveRange: 30 + Math.random() * 70,
+          originalPosition: { x: itemX2, y: itemY2 }
         });
       }
       
       // Always add one door
       baseInteractables.push({
+        id: 20,
         x: 750, y: 430, width: 40, height: 70,
         type: 'door', state: 'locked', reality: 'physical'
       });
@@ -137,7 +240,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       velocity: { x: 0, y: 0 },
       isJumping: false,
       platforms: basePlatforms,
-      interactables: baseInteractables
+      interactables: baseInteractables,
+      tempStairs: [],
+      level: level
     };
   }
   
@@ -185,6 +290,42 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         }
       }
       
+      // Create temporary stairs with C
+      if (e.code === 'KeyC') {
+        if (gameState.energy >= 10) {
+          // Check if enough time has passed since last stair creation (1 second cooldown)
+          const now = Date.now();
+          if (now - lastStairRef.current > 1000) {
+            lastStairRef.current = now;
+            
+            // Create stair in front of the player
+            const stairX = gameState.position.x + (gameState.velocity.x >= 0 ? PLAYER_WIDTH : -40);
+            const stairY = gameState.position.y + PLAYER_HEIGHT;
+            
+            // Add the temporary stair
+            setGameState(prev => ({
+              ...prev,
+              energy: Math.max(0, prev.energy - 10),
+              tempStairs: [...prev.tempStairs, {
+                x: stairX,
+                y: stairY,
+                width: 40,
+                height: 100,
+                reality: prev.reality,
+                createdAt: now,
+                duration: STAIR_DURATION
+              }]
+            }));
+            
+            showMessage("Escalera temporal creada! Durará 6 segundos");
+          } else {
+            showMessage("Espera un momento para crear otra escalera");
+          }
+        } else {
+          showMessage("No tienes suficiente energía para crear una escalera");
+        }
+      }
+      
       // Interact with E
       if (e.code === 'KeyE') {
         handleInteraction();
@@ -206,7 +347,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState.reality, gameState.energy, isTransitioning]);
+  }, [gameState.reality, gameState.energy, gameState.position, isTransitioning]);
+  
+  // Handle temporary stairs expiration
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      
+      setGameState(prev => {
+        // Filter out expired stairs
+        const updatedStairs = prev.tempStairs.filter(stair => 
+          now - stair.createdAt < stair.duration
+        );
+        
+        // Only update if there's been a change
+        if (updatedStairs.length !== prev.tempStairs.length) {
+          return {
+            ...prev,
+            tempStairs: updatedStairs
+          };
+        }
+        
+        return prev;
+      });
+    }, 1000); // Check every second
+    
+    return () => clearInterval(cleanupInterval);
+  }, []);
   
   // Handle player interaction with objects
   const handleInteraction = () => {
@@ -237,7 +404,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
         // Unlock the terminal and the door
         setGameState(prev => {
           const updatedInteractables = prev.interactables.map(item => {
-            if (item.type === 'terminal' && item.x === interactable.x && item.y === interactable.y) {
+            if (item.id === interactable.id) {
               return { ...item, state: 'unlocked' as const };
             }
             if (item.type === 'door' && prev.interactables.filter(i => 
@@ -292,7 +459,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       // Remove the item from the game and add energy
       setGameState(prev => {
         const updatedInteractables = prev.interactables.filter(item => 
-          !(item.type === 'item' && item.x === interactable.x && item.y === interactable.y)
+          !(item.id === interactable.id)
         );
         
         return {
@@ -367,10 +534,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
           newState.position.x = canvas.width - PLAYER_WIDTH;
         }
         
+        // Update moving objects
+        const updatedInteractables = newState.interactables.map(obj => {
+          if (obj.isMoving && obj.moveSpeed && obj.moveDirection && obj.moveRange && obj.originalPosition) {
+            const originalX = obj.originalPosition.x;
+            const originalY = obj.originalPosition.y;
+            
+            if (obj.moveDirection === 'horizontal') {
+              // Calculate new position based on sine wave
+              const time = Date.now() / 1000; // time in seconds
+              const newX = originalX + Math.sin(time * obj.moveSpeed) * obj.moveRange;
+              return { ...obj, x: newX };
+            } else {
+              // Vertical movement
+              const time = Date.now() / 1000; // time in seconds
+              const newY = originalY + Math.sin(time * obj.moveSpeed) * obj.moveRange;
+              return { ...obj, y: newY };
+            }
+          }
+          return obj;
+        });
+        
+        newState.interactables = updatedInteractables;
+        
         // Reset jumping state if on a platform
         let onPlatform = false;
         
-        // Collision detection with platforms
+        // Check platforms first
         for (const platform of newState.platforms) {
           // Skip platforms that aren't in the current reality
           if (platform.type !== 'both' && platform.type !== newState.reality) continue;
@@ -391,6 +581,32 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
             newState.velocity.y = 0;
             newState.isJumping = false;
             onPlatform = true;
+          }
+        }
+        
+        // Then check temporary stairs
+        if (!onPlatform) {
+          for (const stair of newState.tempStairs) {
+            // Skip stairs that aren't in the current reality
+            if (stair.reality !== 'both' && stair.reality !== newState.reality) continue;
+            
+            const playerBottom = newState.position.y + PLAYER_HEIGHT;
+            const stairTop = stair.y;
+            
+            // Check if player is directly above the stair and falling
+            if (
+              newState.velocity.y >= 0 &&
+              playerBottom >= stairTop && 
+              playerBottom - newState.velocity.y <= stairTop &&
+              newState.position.x + PLAYER_WIDTH > stair.x && 
+              newState.position.x < stair.x + stair.width
+            ) {
+              // Land on stair
+              newState.position.y = stair.y - PLAYER_HEIGHT;
+              newState.velocity.y = 0;
+              newState.isJumping = false;
+              onPlatform = true;
+            }
           }
         }
         
@@ -447,11 +663,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
     // Clear canvas
     context.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Level-specific colors
+    const levelColors = getLevelColors(gameState.level);
+    
     // Draw background based on reality
     if (gameState.reality === 'physical') {
-      context.fillStyle = '#1f1f3a';
+      context.fillStyle = levelColors.physical.background;
     } else {
-      context.fillStyle = '#1a3a2a';
+      context.fillStyle = levelColors.digital.background;
     }
     context.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -481,11 +700,43 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
     gameState.platforms.forEach(platform => {
       if (platform.type === 'both' || platform.type === gameState.reality) {
         if (gameState.reality === 'physical') {
-          context.fillStyle = '#7E69AB';
+          context.fillStyle = levelColors.physical.platform;
         } else {
-          context.fillStyle = '#1EAEDB';
+          context.fillStyle = levelColors.digital.platform;
         }
         context.fillRect(platform.x, platform.y, platform.width, platform.height);
+      }
+    });
+    
+    // Draw temporary stairs
+    gameState.tempStairs.forEach(stair => {
+      if (stair.reality === 'both' || stair.reality === gameState.reality) {
+        // Calculate remaining time
+        const remainingTime = stair.duration - (Date.now() - stair.createdAt);
+        const fadeOutFactor = Math.min(1, remainingTime / 1000); // Start fading in the last second
+        
+        if (gameState.reality === 'physical') {
+          context.fillStyle = `rgba(215, 150, 255, ${fadeOutFactor})`;
+        } else {
+          context.fillStyle = `rgba(51, 195, 240, ${fadeOutFactor})`;
+        }
+        
+        // Draw stair steps
+        const stepHeight = stair.height / 5;
+        const stepWidth = stair.width;
+        
+        for (let i = 0; i < 5; i++) {
+          const stepX = stair.x;
+          const stepY = stair.y - i * stepHeight;
+          const currentStepWidth = stepWidth * (1 - i * 0.15); // Steps get smaller as they go up
+          
+          context.fillRect(stepX, stepY, currentStepWidth, stepHeight - 2);
+        }
+        
+        // Draw stair icon
+        context.fillStyle = 'white';
+        context.font = '12px "Share Tech Mono", monospace';
+        context.fillText('⟰', stair.x + stair.width / 2 - 6, stair.y - stair.height / 2);
       }
     });
     
@@ -496,13 +747,54 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
           // Draw terminal
           context.fillStyle = interactable.state === 'locked' ? '#F97316' : '#33C3F0';
           context.fillRect(interactable.x, interactable.y, interactable.width, interactable.height);
+          
+          // Draw terminal screen
+          context.fillStyle = interactable.state === 'locked' ? '#FFD700' : '#33FFAA';
+          context.fillRect(interactable.x + 5, interactable.y + 5, interactable.width - 10, interactable.height - 15);
+          
+          // Draw terminal base
+          context.fillStyle = '#333333';
+          context.fillRect(interactable.x + 5, interactable.y + interactable.height - 10, interactable.width - 10, 5);
         } else if (interactable.type === 'door') {
           // Draw door
           context.fillStyle = interactable.state === 'locked' ? '#D946EF' : '#33C3F0';
           context.fillRect(interactable.x, interactable.y, interactable.width, interactable.height);
+          
+          // Draw door handle
+          context.fillStyle = '#FFFFFF';
+          context.beginPath();
+          context.arc(
+            interactable.x + interactable.width - 10,
+            interactable.y + interactable.height / 2,
+            5,
+            0,
+            Math.PI * 2
+          );
+          context.fill();
+          
+          // Draw lock if locked
+          if (interactable.state === 'locked') {
+            context.fillStyle = '#FFFF00';
+            context.fillRect(interactable.x + interactable.width / 2 - 5, interactable.y + interactable.height / 2 - 10, 10, 15);
+            context.fillRect(interactable.x + interactable.width / 2 - 7, interactable.y + interactable.height / 2 - 10, 14, 5);
+          }
         } else if (interactable.type === 'item') {
-          // Draw energy item
-          context.fillStyle = '#F97316';
+          // Draw energy item with glowing effect
+          // Inner bright core
+          context.fillStyle = gameState.reality === 'physical' ? '#FFAA33' : '#33FFAA';
+          context.beginPath();
+          context.arc(
+            interactable.x + interactable.width / 2,
+            interactable.y + interactable.height / 2, 
+            interactable.width / 2 - 2, 
+            0, 
+            Math.PI * 2
+          );
+          context.fill();
+          
+          // Outer glow
+          context.strokeStyle = gameState.reality === 'physical' ? '#F97316' : '#33C3F0';
+          context.lineWidth = 2;
           context.beginPath();
           context.arc(
             interactable.x + interactable.width / 2,
@@ -511,16 +803,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
             0, 
             Math.PI * 2
           );
-          context.fill();
+          context.stroke();
+          
+          // Pulsating effect based on time
+          const pulseSize = Math.sin(Date.now() / 200) * 3 + 2;
+          context.strokeStyle = gameState.reality === 'physical' ? 'rgba(249, 115, 22, 0.5)' : 'rgba(51, 195, 240, 0.5)';
+          context.beginPath();
+          context.arc(
+            interactable.x + interactable.width / 2,
+            interactable.y + interactable.height / 2, 
+            interactable.width / 2 + pulseSize, 
+            0, 
+            Math.PI * 2
+          );
+          context.stroke();
         }
       }
     });
     
     // Draw player
     if (gameState.reality === 'physical') {
-      context.fillStyle = '#9b87f5';
+      context.fillStyle = levelColors.physical.player;
     } else {
-      context.fillStyle = '#33C3F0';
+      context.fillStyle = levelColors.digital.player;
     }
     context.fillRect(
       gameState.position.x, 
@@ -528,6 +833,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       PLAYER_WIDTH, 
       PLAYER_HEIGHT
     );
+    
+    // Draw player eyes
+    context.fillStyle = 'white';
+    context.fillRect(gameState.position.x + 8, gameState.position.y + 10, 5, 5);
+    context.fillRect(gameState.position.x + 18, gameState.position.y + 10, 5, 5);
     
     // Draw reality transition effect
     if (isTransitioning) {
@@ -551,7 +861,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
     // Draw level instructions
     context.fillStyle = 'rgba(155, 135, 245, 0.7)';
     context.font = '14px "Share Tech Mono", monospace';
-    context.fillText(`Nivel ${level}: Resuelve 10 objetos para avanzar`, 10, 20);
+    context.fillText(`Nivel ${gameState.level}: Resuelve 10 objetos para avanzar`, 10, 20);
+  };
+  
+  // Get color scheme based on level
+  const getLevelColors = (level: number) => {
+    return {
+      physical: {
+        background: level % 3 === 0 ? '#1f2a3a' : level % 2 === 0 ? '#2a1f3a' : '#1f1f3a',
+        platform: level % 3 === 0 ? '#8E77CE' : level % 2 === 0 ? '#7E89AB' : '#7E69AB',
+        player: level % 3 === 0 ? '#a797f5' : level % 2 === 0 ? '#8b97f5' : '#9b87f5',
+      },
+      digital: {
+        background: level % 3 === 0 ? '#1a3a20' : level % 2 === 0 ? '#1a203a' : '#1a3a2a',
+        platform: level % 3 === 0 ? '#33e3f0' : level % 2 === 0 ? '#33f0ae' : '#1EAEDB',
+        player: level % 3 === 0 ? '#33f0f0' : level % 2 === 0 ? '#33f0dd' : '#33C3F0',
+      }
+    };
   };
   
   return (
@@ -612,7 +938,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) =>
       
       {/* Controls Info */}
       <div className="absolute bottom-0 left-0 text-xs text-muted-foreground p-2">
-        <p>WASD/Arrows to move, Space to jump, Tab to shift reality, E to interact</p>
+        <p>WASD/Arrows to move, Space to jump, Tab to shift reality, E to interact, C to create stairs</p>
       </div>
     </div>
   );
