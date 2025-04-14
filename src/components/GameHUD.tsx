@@ -8,13 +8,17 @@ type GameHUDProps = {
   energy: number;
   reality: 'physical' | 'digital';
   score?: number;
+  solvedObjects?: number;
+  totalObjectsToSolve?: number;
 };
 
 const GameHUD: React.FC<GameHUDProps> = ({ 
   health, 
   energy, 
   reality,
-  score = 0
+  score = 0,
+  solvedObjects = 0,
+  totalObjectsToSolve = 10
 }) => {
   return (
     <div className="pointer-events-none fixed top-0 left-0 w-full h-full z-10 flex flex-col">
@@ -60,6 +64,16 @@ const GameHUD: React.FC<GameHUDProps> = ({
               reality === 'physical' ? "animate-pulse" : "animate-flicker"
             )}
           />
+        </div>
+      </div>
+      
+      {/* Game Instructions - Below Energy Bar */}
+      <div className="w-full px-4 flex justify-center">
+        <div className="holographic rounded-md p-2 mt-1 text-center">
+          <p className="text-xs font-cyber text-white">
+            MISIÓN: <span className="text-neon-skyBlue">Resuelve {totalObjectsToSolve} objetos para subir de nivel</span> - 
+            Progreso: <span className="text-neon-pink">{solvedObjects}/{totalObjectsToSolve}</span>
+          </p>
         </div>
       </div>
       

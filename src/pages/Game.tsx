@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { Menu, CircleArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from '@/components/ui/use-toast';
 
 const Game: React.FC = () => {
   const [health, setHealth] = useState(100);
@@ -16,6 +17,26 @@ const Game: React.FC = () => {
   const [transitionFrom, setTransitionFrom] = useState<'physical' | 'digital'>('physical');
   const [transitionTo, setTransitionTo] = useState<'physical' | 'digital'>('digital');
   const [isPaused, setIsPaused] = useState(false);
+  const [solvedObjects, setSolvedObjects] = useState(0);
+  const [level, setLevel] = useState(1);
+  const { toast } = useToast();
+  
+  // Handle object solved event
+  const handleObjectSolved = () => {
+    setSolvedObjects(prev => {
+      const newValue = prev + 1;
+      // Check if level should increase
+      if (newValue >= 10) {
+        setLevel(prevLevel => prevLevel + 1);
+        toast({
+          title: "¡Nivel Completado!",
+          description: `Has avanzado al nivel ${level + 1}. Nuevos desafíos te esperan.`,
+        });
+        return 0; // Reset solved objects for next level
+      }
+      return newValue;
+    });
+  };
   
   // Simulate game events
   useEffect(() => {
@@ -55,7 +76,9 @@ const Game: React.FC = () => {
         health={health}
         energy={energy}
         reality={reality}
-        score={2500}
+        score={level * 250 + solvedObjects * 25}
+        solvedObjects={solvedObjects}
+        totalObjectsToSolve={10}
       />
       
       {/* Pause Menu Button */}
@@ -135,7 +158,7 @@ const Game: React.FC = () => {
       {/* Game Canvas */}
       {!isTransitioning && (
         <div className="w-full h-screen flex justify-center items-center">
-          <GameCanvas />
+          <GameCanvas onObjectSolved={handleObjectSolved} level={level} />
         </div>
       )}
       

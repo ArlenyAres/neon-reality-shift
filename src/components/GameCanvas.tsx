@@ -33,72 +33,119 @@ type Interactable = {
   reality: 'physical' | 'digital' | 'both';
 };
 
+type GameCanvasProps = {
+  onObjectSolved?: () => void;
+  level?: number;
+};
+
 const GRAVITY = 0.5;
 const JUMP_FORCE = -12;
 const MOVE_SPEED = 5;
 const PLAYER_WIDTH = 30;
 const PLAYER_HEIGHT = 50;
-const INITIAL_GAME_STATE: GameState = {
-  health: 100,
-  energy: 100,
-  reality: 'physical',
-  position: { x: 100, y: 300 },
-  velocity: { x: 0, y: 0 },
-  isJumping: false,
-  platforms: [
-    // Base platform - always visible
-    { x: 0, y: 500, width: 800, height: 20, type: 'both' },
-    
-    // Physical reality platforms
-    { x: 200, y: 400, width: 150, height: 20, type: 'physical' },
-    { x: 500, y: 350, width: 150, height: 20, type: 'physical' },
-    
-    // Digital reality platforms
-    { x: 350, y: 320, width: 150, height: 20, type: 'digital' },
-    { x: 650, y: 250, width: 150, height: 20, type: 'digital' },
-  ],
-  interactables: [
-    // Terminal - interact to unlock door
-    { 
-      x: 400, 
-      y: 470, 
-      width: 30, 
-      height: 30, 
-      type: 'terminal', 
-      state: 'locked', 
-      reality: 'digital'
-    },
-    // Door - exit point
-    { 
-      x: 750, 
-      y: 430, 
-      width: 40, 
-      height: 70, 
-      type: 'door', 
-      state: 'locked', 
-      reality: 'physical'
-    },
-    // Item - gives energy
-    { 
-      x: 300, 
-      y: 370, 
-      width: 20, 
-      height: 20, 
-      type: 'item', 
-      state: 'unlocked', 
-      reality: 'physical'
-    },
-  ]
-};
 
-const GameCanvas: React.FC = () => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ onObjectSolved, level = 1 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [gameState, setGameState] = useState<GameState>({...INITIAL_GAME_STATE});
+  const [gameState, setGameState] = useState<GameState>(() => generateLevelState(level));
   const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { toast } = useToast();
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Generate level state based on current level
+  function generateLevelState(level: number): GameState {
+    // Base platforms that are always present
+    const basePlatforms: Platform[] = [
+      // Base platform - always visible
+      { x: 0, y: 500, width: 800, height: 20, type: 'both' },
+    ];
+    
+    // Base interactables
+    const baseInteractables: Interactable[] = [];
+    
+    // Add level-specific platforms and interactables
+    if (level === 1) {
+      // Level 1 platforms
+      basePlatforms.push(
+        { x: 200, y: 400, width: 150, height: 20, type: 'physical' },
+        { x: 500, y: 350, width: 150, height: 20, type: 'physical' },
+        { x: 350, y: 320, width: 150, height: 20, type: 'digital' },
+        { x: 650, y: 250, width: 150, height: 20, type: 'digital' }
+      );
+      
+      // Level 1 interactables - we'll add 10 interactable objects for level completion
+      baseInteractables.push(
+        // Terminals - 4 terminals
+        { x: 400, y: 470, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
+        { x: 550, y: 330, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
+        { x: 250, y: 380, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
+        { x: 680, y: 230, width: 30, height: 30, type: 'terminal', state: 'locked', reality: 'digital' },
+        
+        // Energy items - 3 items
+        { x: 300, y: 370, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'physical' },
+        { x: 470, y: 320, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'physical' },
+        { x: 630, y: 220, width: 20, height: 20, type: 'item', state: 'unlocked', reality: 'digital' },
+        
+        // Door - exit point (counts as 3 objects when unlocked)
+        { x: 750, y: 430, width: 40, height: 70, type: 'door', state: 'locked', reality: 'physical' }
+      );
+    } else {
+      // Higher levels - more complex configurations
+      // Generate more platforms with increasing difficulty
+      for (let i = 0; i < level + 3; i++) {
+        const x = Math.random() * 700;
+        const y = 150 + Math.random() * 300;
+        const width = 80 + Math.random() * 100;
+        const reality = Math.random() > 0.5 ? 'physical' : 'digital';
+        
+        basePlatforms.push({ x, y, width, height: 20, type: reality });
+      }
+      
+      // Generate more interactables with increasing complexity
+      for (let i = 0; i < 4; i++) {
+        // Terminals
+        const termX = 100 + Math.random() * 600;
+        const termY = 100 + Math.random() * 350;
+        baseInteractables.push({
+          x: termX, y: termY, width: 30, height: 30,
+          type: 'terminal', state: 'locked', reality: 'digital'
+        });
+        
+        // Items
+        const itemX = 100 + Math.random() * 600;
+        const itemY = 100 + Math.random() * 350;
+        const itemReality = Math.random() > 0.5 ? 'physical' : 'digital';
+        baseInteractables.push({
+          x: itemX, y: itemY, width: 20, height: 20,
+          type: 'item', state: 'unlocked', reality: itemReality
+        });
+      }
+      
+      // Always add one door
+      baseInteractables.push({
+        x: 750, y: 430, width: 40, height: 70,
+        type: 'door', state: 'locked', reality: 'physical'
+      });
+    }
+    
+    return {
+      health: 100,
+      energy: 100,
+      reality: 'physical',
+      position: { x: 100, y: 300 },
+      velocity: { x: 0, y: 0 },
+      isJumping: false,
+      platforms: basePlatforms,
+      interactables: baseInteractables
+    };
+  }
+  
+  // Reset game state when level changes
+  useEffect(() => {
+    setGameState(generateLevelState(level));
+    showMessage(`Nivel ${level} iniciado - Resuelve 10 objetos para avanzar`);
+  }, [level]);
 
   // Handle key events
   useEffect(() => {
@@ -190,11 +237,13 @@ const GameCanvas: React.FC = () => {
         // Unlock the terminal and the door
         setGameState(prev => {
           const updatedInteractables = prev.interactables.map(item => {
-            if (item.type === 'terminal') {
-              return { ...item, state: 'unlocked' };
+            if (item.type === 'terminal' && item.x === interactable.x && item.y === interactable.y) {
+              return { ...item, state: 'unlocked' as const };
             }
-            if (item.type === 'door') {
-              return { ...item, state: 'unlocked' };
+            if (item.type === 'door' && prev.interactables.filter(i => 
+              i.type === 'terminal' && i.state === 'unlocked'
+            ).length >= 3) {
+              return { ...item, state: 'unlocked' as const };
             }
             return item;
           });
@@ -205,38 +254,36 @@ const GameCanvas: React.FC = () => {
           };
         });
         
-        showMessage("Terminal hacked! Door unlocked.");
+        showMessage("Terminal hackeado! Terminal desbloqueado.");
         toast({
-          title: "System Hacked",
-          description: "Security protocols bypassed. Exit door unlocked.",
+          title: "Terminal Hackeado",
+          description: "Has desbloqueado un terminal. Hackea más para desbloquear la puerta.",
         });
+        
+        // Notify parent that object was solved
+        if (onObjectSolved) onObjectSolved();
       } else {
-        showMessage("Terminal already hacked");
+        showMessage("Terminal ya hackeado");
       }
     }
     
     // Handle door interaction
     else if (interactable.type === 'door') {
       if (interactable.state === 'unlocked' && gameState.reality === 'physical') {
-        showMessage("Level completed! Escaping to next sector...");
+        showMessage("Puerta desbloqueada! Avanzando al siguiente desafío...");
         toast({
-          title: "Level Complete",
-          description: "Moving to the next sector. Reality shift patterns changing...",
+          title: "Puerta Desbloqueada",
+          description: "Acceso concedido. Este objeto cuenta como 3 objetivos resueltos.",
         });
         
-        // Reset game with slight modifications (could load next level in a real game)
-        setTimeout(() => {
-          setGameState({
-            ...INITIAL_GAME_STATE,
-            platforms: [
-              ...INITIAL_GAME_STATE.platforms,
-              // Add an extra platform for the next level
-              { x: 100, y: 200, width: 100, height: 20, type: 'digital' }
-            ]
-          });
-        }, 2000);
+        // Door counts as 3 objects when solved
+        if (onObjectSolved) {
+          onObjectSolved();
+          onObjectSolved();
+          onObjectSolved();
+        }
       } else if (interactable.state === 'locked') {
-        showMessage("Door is locked. Find a terminal to hack in digital reality.");
+        showMessage("Puerta bloqueada. Hackea terminales en la realidad digital.");
       }
     }
     
@@ -255,7 +302,10 @@ const GameCanvas: React.FC = () => {
         };
       });
       
-      showMessage("Energy shard collected (+30 energy)");
+      showMessage("Fragmento de energía recogido (+30 energía)");
+      
+      // Notify parent that object was solved
+      if (onObjectSolved) onObjectSolved();
     }
   };
   
@@ -351,16 +401,16 @@ const GameCanvas: React.FC = () => {
         
         // If fell off the bottom, reset
         if (newState.position.y > canvas.height) {
-          newState.position = { ...INITIAL_GAME_STATE.position };
+          newState.position = { x: 100, y: 300 };
           newState.velocity = { x: 0, y: 0 };
           newState.health = Math.max(0, newState.health - 20);
           
-          showMessage("Fell into the void! Health -20");
+          showMessage("Caída al vacío! Salud -20");
           
           if (newState.health <= 0) {
-            showMessage("Game Over - Restarting");
+            showMessage("Game Over - Reiniciando");
             setTimeout(() => {
-              setGameState({...INITIAL_GAME_STATE});
+              setGameState(generateLevelState(1));
             }, 2000);
           }
         }
@@ -388,7 +438,7 @@ const GameCanvas: React.FC = () => {
         clearTimeout(messageTimeoutRef.current);
       }
     };
-  }, [keysPressed, isTransitioning]);
+  }, [keysPressed, isTransitioning, level, onObjectSolved]);
   
   // Render game
   const renderGame = (context: CanvasRenderingContext2D) => {
@@ -497,6 +547,11 @@ const GameCanvas: React.FC = () => {
         context.fillRect(canvas.width - width2, y2, width2, 2);
       }
     }
+    
+    // Draw level instructions
+    context.fillStyle = 'rgba(155, 135, 245, 0.7)';
+    context.font = '14px "Share Tech Mono", monospace';
+    context.fillText(`Nivel ${level}: Resuelve 10 objetos para avanzar`, 10, 20);
   };
   
   return (
