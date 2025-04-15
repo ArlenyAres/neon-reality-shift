@@ -1,6 +1,5 @@
-
 import { GameState, LevelColors } from '@/types/game.types';
-import { PLAYER_HEIGHT, PLAYER_WIDTH } from '@/constants/game.constants';
+import { PLAYER_HEIGHT, PLAYER_WIDTH, MAX_HAZARD_HITS } from '@/constants/game.constants';
 
 export function renderGame(context: CanvasRenderingContext2D, gameState: GameState, levelColors: LevelColors, isTransitioning: boolean) {
   const canvas = context.canvas;

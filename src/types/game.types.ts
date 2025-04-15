@@ -1,4 +1,3 @@
-
 export type GameState = {
   health: number;
   energy: number;
@@ -13,6 +12,8 @@ export type GameState = {
   level: number;
   hazardHits: number;
   inventory: InventoryItem[];
+  lastBatterySpawn?: number;
+  lastHeartSpawn?: number;
 };
 
 export type InventoryItem = {
